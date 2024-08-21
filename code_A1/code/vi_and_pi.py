@@ -1,6 +1,8 @@
 ### MDP Value Iteration and Policy Iteration
 
 import numpy as np
+from anyio import value
+
 from riverswim import RiverSwim
 
 np.set_printoptions(precision=3)
@@ -25,7 +27,7 @@ def bellman_backup(state, action, R, T, gamma, V):
     backup_val = 0.
     ############################
     # YOUR IMPLEMENTATION HERE #
-
+    backup_val = R[state, action] + gamma * T[state, action, :] @ V
     ############################
 
     return backup_val
@@ -50,7 +52,12 @@ def policy_evaluation(policy, R, T, gamma, tol=1e-3):
 
     ############################
     # YOUR IMPLEMENTATION HERE #
-
+    num_states = policy.shape[0]
+    while True:
+        old_value_function = value_function
+        value_function = R[range(num_states), policy] + gamma * T[range(num_states), policy, :] @ old_value_function
+        if np.linalg.norm(value_function - old_value_function, ord=np.inf) < tol:
+            break
     ############################
     return value_function
 
@@ -75,7 +82,7 @@ def policy_improvement(policy, R, T, V_policy, gamma):
 
     ############################
     # YOUR IMPLEMENTATION HERE #
-
+    new_policy = np.argmax(R + gamma * T @ V_policy, axis=1)
     ############################
     return new_policy
 
@@ -100,7 +107,14 @@ def policy_iteration(R, T, gamma, tol=1e-3):
     policy = np.zeros(num_states, dtype=int)
     ############################
     # YOUR IMPLEMENTATION HERE #
-
+    V_policy = policy_evaluation(policy, R, T, gamma, tol)
+    while True:
+        old_policy = policy
+        old_V_policy = V_policy
+        policy = policy_improvement(old_policy, R, T, old_V_policy, gamma)
+        V_policy = policy_evaluation(policy, R, T, gamma, tol)
+        if np.linalg.norm(V_policy - old_V_policy, ord=np.inf) < tol:   # 如果使用 2-norm，结果会不一样
+            break
     ############################
     return V_policy, policy
 
@@ -122,7 +136,12 @@ def value_iteration(R, T, gamma, tol=1e-3):
     policy = np.zeros(num_states, dtype=int)
     ############################
     # YOUR IMPLEMENTATION HERE #
-
+    while True:
+        old_value_function = value_function
+        value_function = np.max(R + gamma * T @ old_value_function, axis=1)
+        if np.linalg.norm(value_function - old_value_function, ord=np.inf) < tol:
+            break;
+    policy = np.argmax(R + gamma * T @ value_function, axis=1)
     ############################
     return value_function, policy
 
