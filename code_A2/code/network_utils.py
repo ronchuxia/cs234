@@ -25,7 +25,15 @@ def build_mlp(input_size, output_size, n_layers, size):
     """
     #######################################################
     #########   YOUR CODE HERE - 7-15 lines.   ############
-
+    layers = []
+    layers.append(nn.Linear(input_size, size))
+    layers.append(nn.ReLU())
+    for i in range(n_layers - 1):   # n_layers is the number of hidden layers, not including the output layer
+        layers.append(nn.Linear(size, size))
+        layers.append(nn.ReLU())
+    layers.append(nn.Linear(size, output_size))
+    network = nn.Sequential(*layers).to(device)
+    return network
     #######################################################
     #########          END YOUR CODE.          ############
 

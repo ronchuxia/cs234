@@ -47,7 +47,17 @@ class PPO(PolicyGradient):
 
         #######################################################
         #########   YOUR CODE HERE - 10-15 lines.   ###########
+        distributions = self.policy.action_distribution(observations)
+        log_probs = distributions.log_prob(actions)
+        z = torch.exp(log_probs - old_logprobs)  # shape (batch_size, )
+        arg1 = z * advantages
+        arg2 = torch.clip(z, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+        arg = torch.stack([arg1, arg2], dim=1)
+        loss = - torch.mean(torch.min(arg, dim=1).values)
 
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -100,7 +110,9 @@ class PPO(PolicyGradient):
             averaged_total_rewards.append(avg_reward)
             self.logger.info(msg)
 
-            if self.config.record and (last_record > self.config.record_freq):
+            last_record += 1
+
+            if self.config.record and (last_record == self.config.record_freq):
                 self.logger.info("Recording...")
                 last_record = 0
                 self.record()

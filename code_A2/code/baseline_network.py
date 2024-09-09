@@ -26,7 +26,9 @@ class BaselineNetwork(nn.Module):
 
         #######################################################
         #########   YOUR CODE HERE - 2-8 lines.   #############
+        self.network = build_mlp(observation_dim, 1, self.config.n_layers, self.config.layer_size)
 
+        self.optimizer = torch.optim.Adam(self.network.parameters(), self.lr)
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -50,7 +52,7 @@ class BaselineNetwork(nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 1 lines.     #############
-
+        output = self.network(observations).squeeze()   # shape: (batch_size, )
         #######################################################
         #########          END YOUR CODE.          ############
         assert output.ndim == 1
@@ -78,7 +80,8 @@ class BaselineNetwork(nn.Module):
         observations = np2torch(observations)
         #######################################################
         #########   YOUR CODE HERE - 1-4 lines.   ############
-
+        baselines = self(observations).numpy(force=True)
+        advantages = returns - baselines
         #######################################################
         #########          END YOUR CODE.          ############
         return advantages
@@ -100,6 +103,11 @@ class BaselineNetwork(nn.Module):
         observations = np2torch(observations)
         #######################################################
         #########   YOUR CODE HERE - 4-10 lines.  #############
+        baselines = self(observations)  # shape: (batch_size, )
+        loss = nn.functional.mse_loss(baselines, returns)
 
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         #######################################################
         #########          END YOUR CODE.          ############

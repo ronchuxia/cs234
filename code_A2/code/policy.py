@@ -43,7 +43,11 @@ class BasePolicy:
         observations = np2torch(observations)
         #######################################################
         #########   YOUR CODE HERE - 1-4 lines.    ############
-
+        distribution = self.action_distribution(observations)
+        sampled_actions = distribution.sample()
+        log_probs = distribution.log_prob(sampled_actions)
+        sampled_actions = sampled_actions.numpy(force=True)
+        log_probs = log_probs.numpy(force=True)
         #######################################################
         #########          END YOUR CODE.          ############
         if return_log_prob:
@@ -68,7 +72,8 @@ class CategoricalPolicy(BasePolicy, nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 1-2 lines.    ############
-
+        logits = self.network(observations)
+        distribution = ptd.Categorical(logits=logits)
         #######################################################
         #########          END YOUR CODE.          ############
         return distribution
@@ -86,7 +91,7 @@ class GaussianPolicy(BasePolicy, nn.Module):
         self.network = network
         #######################################################
         #########   YOUR CODE HERE - 1 line.       ############
-
+        self.log_std = nn.Parameter(torch.zeros(action_dim)).to(device)
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -100,7 +105,7 @@ class GaussianPolicy(BasePolicy, nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 1 line.       ############
-
+        std = torch.exp(self.log_std)
         #######################################################
         #########          END YOUR CODE.          ############
         return std
@@ -124,7 +129,9 @@ class GaussianPolicy(BasePolicy, nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 2-4 lines.    ############
-
+        mean = self.network(observations)   # shape: (batch_size, action_dim)
+        std = self.std()    # shape: (action_dim, )
+        distribution = ptd.MultivariateNormal(loc=mean, covariance_matrix=torch.diag(std**2))
         #######################################################
         #########          END YOUR CODE.          ############
         return distribution

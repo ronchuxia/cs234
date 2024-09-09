@@ -72,7 +72,14 @@ class PolicyGradient(object):
         """
         #######################################################
         #########   YOUR CODE HERE - 8-12 lines.   ############
+        self.network = build_mlp(self.observation_dim, self.action_dim, self.config.n_layers, self.config.layer_size)
 
+        if self.discrete:
+            self.policy = CategoricalPolicy(self.network)
+        else:
+            self.policy = GaussianPolicy(self.network, self.action_dim)
+
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), self.lr)
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -187,14 +194,16 @@ class PolicyGradient(object):
 
         all_returns = []
         for path in paths:
-            rewards = path["reward"]
+            rewards = path["reward"]    # shape (T, )
             #######################################################
             #########   YOUR CODE HERE - 5-10 lines.   ############
-
+            returns = rewards.copy()
+            for t in range(len(rewards) - 2, -1, -1):
+                returns[t] += self.config.gamma * returns[t + 1]
             #######################################################
             #########          END YOUR CODE.          ############
             all_returns.append(returns)
-        returns = np.concatenate(all_returns)
+        returns = np.concatenate(all_returns)   # shape (batch_size, )
 
         return returns
 
@@ -215,7 +224,7 @@ class PolicyGradient(object):
         """
         #######################################################
         #########   YOUR CODE HERE - 1-2 lines.    ############
-
+        normalized_advantages = (advantages - np.mean(advantages)) / np.std(advantages)
         #######################################################
         #########          END YOUR CODE.          ############
         return normalized_advantages
@@ -268,7 +277,13 @@ class PolicyGradient(object):
         advantages = np2torch(advantages)
         #######################################################
         #########   YOUR CODE HERE - 5-7 lines.    ############
+        distribution = self.policy.action_distribution(observations)
+        log_probs = distribution.log_prob(actions)   # shape (batch_size, )
+        loss = - torch.mean(log_probs * advantages)
 
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -292,11 +307,11 @@ class PolicyGradient(object):
             # collect a minibatch of samples
             paths, total_rewards = self.sample_path(self.env)
             all_total_rewards.extend(total_rewards)
-            observations = np.concatenate([path["observation"] for path in paths])
-            actions = np.concatenate([path["action"] for path in paths])
+            observations = np.concatenate([path["observation"] for path in paths])  # shape (batch_size, observation_dim). Note: batch_size is the total number of steps in all episodes, not the number of episodes
+            actions = np.concatenate([path["action"] for path in paths])    # shape (batch_size, action_dim)
             rewards = np.concatenate([path["reward"] for path in paths])
             # compute Q-val estimates (discounted future returns) for each time step
-            returns = self.get_returns(paths)
+            returns = self.get_returns(paths)   # shape (batch_size, )
 
             # advantage will depend on the baseline implementation
             advantages = self.calculate_advantage(returns, observations)
@@ -320,7 +335,9 @@ class PolicyGradient(object):
             averaged_total_rewards.append(avg_reward)
             self.logger.info(msg)
 
-            if self.config.record and (last_record > self.config.record_freq):
+            last_record += 1
+
+            if self.config.record and (last_record == self.config.record_freq):
                 self.logger.info("Recording...")
                 last_record = 0
                 self.record()
