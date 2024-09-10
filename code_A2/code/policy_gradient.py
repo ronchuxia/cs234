@@ -144,7 +144,7 @@ class PolicyGradient(object):
 
             for step in range(self.config.max_ep_len):
                 states.append(state)
-                action = self.policy.act(states[-1][None])[0]
+                action = self.policy.act(states[-1][None])[0]   # states[-1][None]: shape (1, observation_dim)
                 state, reward, done, info = env.step(action)
                 actions.append(action)
                 rewards.append(reward)

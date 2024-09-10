@@ -47,7 +47,13 @@ class RewardModel(nn.Module):
         super().__init__()
         #######################################################
         #########   YOUR CODE HERE - 2-10 lines.   ############
-
+        layers = []
+        layers.append(nn.Linear(obs_dim + action_dim, hidden_dim))
+        layers.append(nn.LeakyReLU())
+        layers.append(nn.Linear(hidden_dim, 1))
+        layers.append(nn.Sigmoid())
+        self.net = nn.Sequential(*layers)
+        self.optimizer = torch.optim.AdamW(self.net.parameters())
         #######################################################
         #########          END YOUR CODE.          ############
         self.r_min = r_min
@@ -86,7 +92,9 @@ class RewardModel(nn.Module):
         rewards = torch.zeros(obs.shape[0])
         #######################################################
         #########   YOUR CODE HERE - 2-3 lines.   ############
-
+        input = torch.cat((obs, action), dim=1)
+        rewards = self.net(input)
+        rewards = self.r_min + rewards * (self.r_max - self.r_min)
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -118,7 +126,8 @@ class RewardModel(nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 1-4 lines.   ############
-
+        reward = self.forward(np2torch(obs).unsqueeze(0), np2torch(action).unsqueeze(0)).item()
+        return reward
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -143,7 +152,15 @@ class RewardModel(nn.Module):
         loss = torch.zeros(1)
         #######################################################
         #########   YOUR CODE HERE - 5-10 lines.   ############
-
+        reward1 = torch.sum(self(obs1, act1), dim=1)
+        reward2 = torch.sum(self(obs2, act2), dim=1) 
+        prob_prefer_1 = F.sigmoid(reward1 - reward2)
+        prob_prefer_2 = F.sigmoid(reward2 - reward1)
+        input = torch.stack((prob_prefer_1, prob_prefer_2), dim=1)
+        target1 = 1 - label
+        target2 = label
+        target = torch.stack((target1, target2), dim=1)
+        loss = F.cross_entropy(input, target)
         #######################################################
         #########          END YOUR CODE.          ############
 

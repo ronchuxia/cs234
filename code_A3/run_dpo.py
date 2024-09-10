@@ -64,7 +64,12 @@ class ActionSequenceModel(nn.Module):
         self.segment_len = segment_len
         #######################################################
         #########   YOUR CODE HERE - 3-9 lines.    ############
-
+        layers = []
+        layers.append(nn.Linear(obs_dim, hidden_dim))
+        layers.append(nn.ReLU())
+        layers.append(nn.Linear(hidden_dim, segment_len * action_dim * 2))
+        self.net = nn.Sequential(*layers)
+        self.optimizer = torch.optim.AdamW(self.net.parameters(), lr=lr)
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -105,7 +110,12 @@ class ActionSequenceModel(nn.Module):
 
         #######################################################
         #########   YOUR CODE HERE - 3-9 lines.    ############
-
+        mean, log_std = torch.split(net_out, self.segment_len * self.action_dim, dim=1)
+        mean = F.tanh(mean)
+        mean = torch.reshape(mean, (batch_size, self.segment_len, self.action_dim))
+        log_std = torch.clamp(log_std, LOGSTD_MIN, LOGSTD_MAX)
+        std = torch.exp(log_std)
+        std = torch.reshape(std, (batch_size, self.segment_len, self.action_dim))
         #######################################################
         #########          END YOUR CODE.          ############
         return mean, std
@@ -134,7 +144,10 @@ class ActionSequenceModel(nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 1-5 lines.    ############
-
+        mean, std = self(obs)
+        normal = D.Normal(mean, std)    # batch_shape: (batch_size, segment_len, action_dim), event_shape: ()
+        diagn = D.Independent(normal, 2)    # NOTE: batch_shape: (batch_size), event_shape: (segment_len, action_dim)
+        return diagn
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -158,7 +171,13 @@ class ActionSequenceModel(nn.Module):
         """
         #######################################################
         #########   YOUR CODE HERE - 2-6 lines.    ############
-
+        obs = torch.tensor(obs, dtype=torch.float).unsqueeze(0)
+        action_distribution = self.distribution(obs)
+        action_sequence = action_distribution.sample()  # shape: (1, self.segment_len, self.action_dim)
+        action = action_sequence[0][0]
+        action = action.numpy(force=True)
+        action = np.clip(action, -1, 1)
+        return action
         #######################################################
         #########          END YOUR CODE.          ############
 
@@ -183,7 +202,13 @@ class SFT(ActionSequenceModel):
         """
         #######################################################
         #########   YOUR CODE HERE - 4-6 lines.    ############
+        action_distribution = self.distribution(obs)    # obs: shape: (batch_size, self.segment_len)
+        log_prob = action_distribution.log_prob(actions)    # actions: shape: (batch_size, self.segment_len, self.action_dim). log_prob: shape: (batch_size, )
+        loss = - torch.mean(log_prob)
 
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         #######################################################
         #########          END YOUR CODE.          ############
         return loss.item()
@@ -232,7 +257,20 @@ class DPO(ActionSequenceModel):
         """
         #######################################################
         #########   YOUR CODE HERE - 8-14 lines.   ############
+        action_distribution = self.distribution(obs)
+        log_prob_w = action_distribution.log_prob(actions_w)
+        log_prob_l = action_distribution.log_prob(actions_l)
+        
+        with torch.no_grad():
+            action_distribution_ref = ref_policy.distribution(obs)
+            log_prob_w_ref = action_distribution_ref.log_prob(actions_w)
+            log_prob_l_ref = action_distribution_ref.log_prob(actions_l)
+        
+        loss = - torch.mean(F.logsigmoid(self.beta * (log_prob_w - log_prob_w_ref - log_prob_l + log_prob_l_ref)))
 
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
         #######################################################
         #########          END YOUR CODE.          ############
         return loss.item()

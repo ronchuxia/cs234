@@ -44,7 +44,7 @@ class BasePolicy:
         #######################################################
         #########   YOUR CODE HERE - 1-4 lines.    ############
         distribution = self.action_distribution(observations)
-        sampled_actions = distribution.sample()
+        sampled_actions = distribution.sample() # shape: (batch_size, action_dim)
         log_probs = distribution.log_prob(sampled_actions)
         sampled_actions = sampled_actions.numpy(force=True)
         log_probs = log_probs.numpy(force=True)
